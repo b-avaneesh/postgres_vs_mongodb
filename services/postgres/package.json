@@ -1,0 +1,21 @@
+{
+  "name": "@services/postgres",
+  "version": "1.0.0",
+  "main": "pg.server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "npm start pg.server.js",
+    "dev": "npm run dev pg.server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@healthcare/shared": "^1.0.0",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "pg": "^8.20.0",
+    "zod": "^4.3.6"
+  }
+}

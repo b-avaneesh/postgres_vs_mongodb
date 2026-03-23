@@ -1,9 +1,9 @@
 const express = require('express');
-const { getClient, isClientUp }= require('./postgres/get-client');
+const { getClient, isClientUp }= require('./get-client');
 require('dotenv').config();
 
 //environment variables
-const { PORT } = process.env;
+const { PG_PORT } = process.env;
 
 const app = express();
 
@@ -16,11 +16,11 @@ app.use(
 async function startServer(){
     await isClientUp();
     
-    app.listen(PORT, () => {
-        console.log(`Running on port ${PORT}`)
+    app.listen(PG_PORT, () => {
+        console.log(`Running on PG_PORT ${PG_PORT}`)
     }); //on successful start - callback
 
-
+    
 }
 
 

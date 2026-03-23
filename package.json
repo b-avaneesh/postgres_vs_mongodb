@@ -1,12 +1,13 @@
 {
   "name": "postgres-vs-mongodb",
   "version": "1.0.0",
-  "description": "��#\u0000 \u0000p\u0000o\u0000s\u0000t\u0000g\u0000r\u0000e\u0000s\u0000_\u0000v\u0000s\u0000_\u0000m\u0000o\u0000n\u0000g\u0000o\u0000d\u0000b\u0000\r\u0000 \u0000",
+  "description": "Project developed by Avaneesh B, Performance comparision between postgres and mongodb in healthcare backdrop.",
   "main": "index.js",
+  "private": "true",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start": "npm start --w services/gateway",
+    "dev": "npm run dev --w services/gateway"
   },
   "repository": {
     "type": "git",
@@ -27,6 +28,13 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",
+    "concurrently": "^9.2.1",
     "nodemon": "^3.1.14"
-  }
+  },
+  "workspaces": [
+    "services/gateway",
+    "services/mongo",
+    "services/postgres",
+    "services/shared"
+  ]
 }
