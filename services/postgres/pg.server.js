@@ -1,27 +1,53 @@
-const express = require('express');
-const { getClient, isClientUp }= require('./get-client');
-require('dotenv').config();
+// const express = require('express');
+// const { getClient, isClientUp }= require('./get-client.postgres');
+// const { getRecord } = require('./postgres.controller');
 
-//environment variables
-const { PG_PORT } = process.env;
+const path = require('path')
+require('dotenv').config({
+    path: path.resolve(__dirname, '.env')
+});
+
+// //environment variables
+// const { PG_SERVER_PORT } = process.env;
+
+// const app = express();
+
+// app.use(
+//     express.json()
+// );
+
+
+// //setting up app
+// async function startServer(){
+//     await isClientUp();
+    
+//     app.listen(PG_SERVER_PORT, () => {
+//         console.log(`Running on PG_PORT ${PG_SERVER_PORT}`)
+//     }); //on successful start - callback
+
+//     await getRecord();
+    
+// }
+
+
+// startServer();
+
+const express = require('express');
+const { getRecord } = require('./postgres.controller');
+
 
 const app = express();
+app.use(express.json());
 
-app.use(
-    express.json()
-);
+const PORT = process.env.PG_SERVER_PORT || 7000;
 
+async function startServer() {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
 
-//setting up app
-async function startServer(){
-    await isClientUp();
-    
-    app.listen(PG_PORT, () => {
-        console.log(`Running on PG_PORT ${PG_PORT}`)
-    }); //on successful start - callback
-
-    
+    // Test a record fetch immediately
+    await getRecord();
 }
-
 
 startServer();

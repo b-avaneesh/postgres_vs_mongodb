@@ -7,16 +7,19 @@ require('dotenv').config(
 
     }
 );
-
-
 //environment variables
-const { GATEWAY_PORT } = process.env;
+const { GATEWAY_PORT, GATEWAY_HOME } = process.env;
 
+//creating app
 const app = express();
 
+//parses using json format
 app.use(
     express.json()
 );
+//home directory for gateway
+app.use(GATEWAY_HOME, require("./gateway.routes.js"));
+
 
 
 //setting up app

@@ -6,8 +6,8 @@
   "private": "true",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "npm start --w services/gateway",
-    "dev": "npm run dev --w services/gateway"
+    "start": "npm start --w services/gateway --w services/mongo --w services/postgres",
+  "dev": "concurrently \"npm run dev -w services/gateway\" \"npm run dev -w services/mongo\" \"npm run dev -w services/postgres\""
   },
   "repository": {
     "type": "git",

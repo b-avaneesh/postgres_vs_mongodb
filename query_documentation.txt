@@ -1,0 +1,20 @@
+//Requires permission to be accessed through scripts.
+COPY patients_5k FROM 'C:/Users/avane/Desktop/Postgres vs MongoDB/datasets/5000/patients5000.csv' CSV HEADER;
+
+COPY doctors_5k FROM 'C:/Users/avane/Desktop/Postgres vs MongoDB/datasets/5000/doctors5000.csv' CSV HEADER;
+
+COPY appointments_5k FROM 'C:/Users/avane/Desktop/Postgres vs MongoDB/datasets/5000/appointments5000.csv' CSV HEADER;
+
+COPY prescriptions_5k FROM 'C:/Users/avane/Desktop/Postgres vs MongoDB/datasets/5000/prescriptions5000.csv' CSV HEADER;
+
+COPY billing_5k FROM 'C:/Users/avane/Desktop/Postgres vs MongoDB/datasets/5000/billing5000.csv' CSV HEADER;
+
+
+//Sequence
+Sequence - used to generate unique numbers - typically used for implicit value allocation for key column (pri key).
+in postgres makes use of
+
+setVal(seq_obj,new_val) --> tells sequence to continue from here
+nextVal(sqp_obj) --> whats the next value
+
+now sequence cannot identify if a record has been deleted - so is the primary key value, that particular value is forever a 'hole' wrt sequence - will never be generated again from its side.

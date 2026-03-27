@@ -43,11 +43,11 @@ for (let i = 1; i <= SIZE; i++) {
   faker.person.lastName(),
   faker.date.birthdate({min:18,max:80,mode:'age'}).toISOString().split('T')[0],
   faker.helpers.arrayElement(['Male','Female']),
-  faker.phone.number(),
+  faker.phone.number({ style: 'international' }),
   faker.internet.email(),
   faker.location.streetAddress(),
   faker.helpers.arrayElement(['A+','A-','B+','B-','O+','O-','AB+','AB-']),
-  faker.phone.number(),
+  faker.phone.number({ style: 'international' }),
   new Date().toISOString()
  ]
 
@@ -72,7 +72,7 @@ for (let i = 1; i <= DOCTORS; i++) {
   faker.person.firstName(),
   faker.person.lastName(),
   faker.helpers.arrayElement(['Cardiology','Neurology','Orthopedics','Dermatology','Pediatrics']),
-  faker.phone.number(),
+  faker.phone.number({ style: 'international' }),
   faker.internet.email(),
   faker.number.int({min:1,max:40}),
   faker.string.alphanumeric(10),
