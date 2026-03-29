@@ -34,5 +34,6 @@ async function query(text, params) {
 }
 
 module.exports = {
-    query // Export a generic query function instead
+    query, // Export a generic query function instead
+    pool   // Export pool for transaction support
 };

@@ -34,7 +34,7 @@ require('dotenv').config({
 
 const express = require('express');
 const { getRecord } = require('./postgres.controller');
-
+const postgresRoutes = require('./postgres.routes');
 
 const app = express();
 app.use(express.json());
@@ -42,6 +42,9 @@ app.use(express.json());
 const PORT = process.env.PG_SERVER_PORT || 7000;
 
 async function startServer() {
+    // Mount routes
+    app.use('/', postgresRoutes);
+
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
     });
