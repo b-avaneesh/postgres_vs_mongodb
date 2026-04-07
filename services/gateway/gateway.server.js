@@ -18,6 +18,8 @@ app.use(
     express.json()
 );
 //home directory for gateway
+//GATEWAY_HOME=/gateway
+
 app.use(GATEWAY_HOME, require("./gateway.routes.js"));
 
 

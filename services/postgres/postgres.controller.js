@@ -1,16 +1,40 @@
 const db = require('./get-client.postgres');
+// const { pool, query } = require('./get-client.postgres')
+
+// Helper functions
+function getTableName(base, db_size) {
+    return `${base}_${db_size}`;
+}
+
+function getPatientId(req) {
+ return req.user?.id || 
+           req.body?.patient_id || 
+           req.params?.patient_id || 
+           req.params?.id; // This is the one hitting '100' in your logs
+}
+
 
 // ============= PRIMARY ENDPOINTS =============
 
 /**
  * POST /patients - Add a new patient record
  */
+// async function explainAnalyze(query, params){
+//     const prefix = `EXPLAIN (ANALYZE, BUFFERS) `;
+//     const final_query = prefix+query;
+//     const res = await db.query(final_query, params);
+//     console.log(res);
+
+// };
+
 async function addPatient(req, res) {
     try {
+        const db_size = req.query.db_size || '5k';
+        const patients_table = getTableName('patients', db_size);
         const { first_name, last_name, date_of_birth, gender, phone_number, email, address } = req.body;
 
         const query = `
-            INSERT INTO patients (first_name, last_name, date_of_birth, gender, phone_number, email, address)
+            INSERT INTO ${patients_table} (first_name, last_name, date_of_birth, gender, phone_number, email, address)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING *;
         `;
@@ -28,10 +52,12 @@ async function addPatient(req, res) {
  */
 async function addDoctor(req, res) {
     try {
+        const db_size = req.query.db_size || '5k';
+        const doctors_table = getTableName('doctors', db_size);
         const { first_name, last_name, specialization, phone_number, email, department } = req.body;
 
         const query = `
-            INSERT INTO doctors (first_name, last_name, specialization, phone_number, email, department)
+            INSERT INTO ${doctors_table} (first_name, last_name, specialization, phone_number, email, department)
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING *;
         `;
@@ -49,10 +75,14 @@ async function addDoctor(req, res) {
  */
 async function addAppointment(req, res) {
     try {
+        const db_size = req.query.db_size || '5k';
+        const appointments_table = getTableName('appointments', db_size);
+        const patients_table = getTableName('patients', db_size);
+        const doctors_table = getTableName('doctors', db_size);
         const { patient_id, doctor_id, appointment_date, appointment_time, status } = req.body;
 
         const query = `
-            INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, status)
+            INSERT INTO ${appointments_table} (patient_id, doctor_id, appointment_date, appointment_time, status)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING *;
         `;
@@ -70,7 +100,11 @@ async function addAppointment(req, res) {
  */
 async function getPatient(req, res) {
     try {
-        const { id } = req.params;
+        const db_size = req.query.db_size || '5k';
+        const patients_table = getTableName('patients', db_size);
+        const appointments_table = getTableName('appointments', db_size);
+        const doctors_table = getTableName('doctors', db_size);
+        const patient_id = getPatientId(req);
 
         const query = `
             SELECT p.*,
@@ -80,14 +114,14 @@ async function getPatient(req, res) {
                        'appointment_date', a.appointment_date,
                        'status', a.status
                    )) as appointments
-            FROM patients p
-            LEFT JOIN appointments a ON p.patient_id = a.patient_id
-            LEFT JOIN doctors d ON a.doctor_id = d.doctor_id
+            FROM ${patients_table} p
+            LEFT JOIN ${appointments_table} a ON p.patient_id = a.patient_id
+            LEFT JOIN ${doctors_table} d ON a.doctor_id = d.doctor_id
             WHERE p.patient_id = $1
             GROUP BY p.patient_id;
         `;
 
-        const result = await db.query(query, [id]);
+        const result = await db.query(query, [patient_id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Patient not found' });
         }
@@ -104,11 +138,13 @@ async function getPatient(req, res) {
  */
 async function updateAppointment(req, res) {
     try {
+        const db_size = req.query.db_size || '5k';
+        const appointments_table = getTableName('appointments', db_size);
         const { id } = req.params;
         const { status } = req.body;
 
         const query = `
-            UPDATE appointments
+            UPDATE ${appointments_table}
             SET status = $1
             WHERE appointment_id = $2
             RETURNING *;
@@ -130,20 +166,25 @@ async function updateAppointment(req, res) {
  */
 async function deletePatient(req, res) {
     try {
-        const { id } = req.params;
+        const db_size = req.query.db_size || '5k';
+        const patients_table = getTableName('patients', db_size);
+        const appointments_table = getTableName('appointments', db_size);
+        const prescriptions_table = getTableName('prescriptions', db_size);
+        const bills_table = getTableName('bills', db_size);
+        const patient_id = getPatientId(req);
 
         // Delete appointments first (foreign key constraint)
-        await db.query('DELETE FROM appointments WHERE patient_id = $1', [id]);
+        await db.query(`DELETE FROM ${appointments_table} WHERE patient_id = $1`, [patient_id]);
 
         // Delete prescriptions
-        await db.query('DELETE FROM prescriptions WHERE patient_id = $1', [id]);
+        await db.query(`DELETE FROM ${prescriptions_table} WHERE patient_id = $1`, [patient_id]);
 
         // Delete bills
-        await db.query('DELETE FROM bills WHERE patient_id = $1', [id]);
+        await db.query(`DELETE FROM ${bills_table} WHERE patient_id = $1`, [patient_id]);
 
         // Delete patient
-        const query = 'DELETE FROM patients WHERE patient_id = $1 RETURNING *;';
-        const result = await db.query(query, [id]);
+        const query = `DELETE FROM ${patients_table} WHERE patient_id = $1 RETURNING *;`;
+        const result = await db.query(query, [patient_id]);
 
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Patient not found' });
@@ -162,6 +203,10 @@ async function deletePatient(req, res) {
  */
 async function revenueReport(req, res) {
     try {
+        const db_size = req.query.db_size || '5k';
+        const doctors_table = getTableName('doctors', db_size);
+        const appointments_table = getTableName('appointments', db_size);
+        const bills_table = getTableName('bills', db_size);
         const { doctor_id, department } = req.query;
 
         let query = `
@@ -171,9 +216,9 @@ async function revenueReport(req, res) {
                 d.department,
                 COUNT(b.bill_id) as total_appointments,
                 SUM(b.amount) as total_revenue
-            FROM doctors d
-            LEFT JOIN appointments a ON d.doctor_id = a.doctor_id
-            LEFT JOIN bills b ON a.appointment_id = b.appointment_id
+            FROM ${doctors_table} d
+            LEFT JOIN ${appointments_table} a ON d.doctor_id = a.doctor_id
+            LEFT JOIN ${bills_table} b ON a.appointment_id = b.appointment_id
         `;
 
         let params = [];
@@ -209,6 +254,9 @@ async function revenueReport(req, res) {
  */
 async function doctorWorkload(req, res) {
     try {
+        const db_size = req.query.db_size || '5k';
+        const doctors_table = getTableName('doctors', db_size);
+        const appointments_table = getTableName('appointments', db_size);
         const query = `
             SELECT
                 d.doctor_id,
@@ -218,8 +266,8 @@ async function doctorWorkload(req, res) {
                 COUNT(a.appointment_id) as total_appointments,
                 COUNT(CASE WHEN a.status = 'Completed' THEN 1 END) as completed_appointments,
                 COUNT(CASE WHEN a.status = 'Scheduled' THEN 1 END) as scheduled_appointments
-            FROM doctors d
-            LEFT JOIN appointments a ON d.doctor_id = a.doctor_id
+            FROM ${doctors_table} d
+            LEFT JOIN ${appointments_table} a ON d.doctor_id = a.doctor_id
             GROUP BY d.doctor_id, d.first_name, d.last_name, d.specialization
             ORDER BY total_appointments DESC;
         `;
@@ -237,13 +285,15 @@ async function doctorWorkload(req, res) {
  */
 async function medicationTrends(req, res) {
     try {
+        const db_size = req.query.db_size || '5k';
+        const prescriptions_table = getTableName('prescriptions', db_size);
         const query = `
             SELECT
                 medication_name,
                 COUNT(*) as frequency,
                 COUNT(DISTINCT p.patient_id) as unique_patients,
                 COUNT(DISTINCT p.doctor_id) as unique_doctors
-            FROM prescriptions p
+            FROM ${prescriptions_table} p
             GROUP BY medication_name
             ORDER BY frequency DESC;
         `;
@@ -283,12 +333,18 @@ async function seedData(req, res) {
  */
 async function resetDatabase(req, res) {
     try {
+        const db_size = req.query.db_size || '5k';
+        const bills_table = getTableName('bills', db_size);
+        const prescriptions_table = getTableName('prescriptions', db_size);
+        const appointments_table = getTableName('appointments', db_size);
+        const patients_table = getTableName('patients', db_size);
+        const doctors_table = getTableName('doctors', db_size);
         // Delete all data in reverse order of foreign key dependencies
-        await db.query('DELETE FROM bills;');
-        await db.query('DELETE FROM prescriptions;');
-        await db.query('DELETE FROM appointments;');
-        await db.query('DELETE FROM patients;');
-        await db.query('DELETE FROM doctors;');
+        await db.query(`DELETE FROM ${bills_table};`);
+        await db.query(`DELETE FROM ${prescriptions_table};`);
+        await db.query(`DELETE FROM ${appointments_table};`);
+        await db.query(`DELETE FROM ${patients_table};`);
+        await db.query(`DELETE FROM ${doctors_table};`);
 
         res.status(200).json({ message: 'Database reset successfully' });
     } catch (err) {
@@ -306,59 +362,69 @@ async function resetDatabase(req, res) {
 async function completeCheckout(req, res) {
     const client = await db.pool.connect();
     try {
+        // console.log("within compeltecheckout");
+        // res.status(200).json({msg:"hmm seems to work till here"});
+        const db_size = req.query.db_size || '5k';
+        const appointments_table = getTableName('appointments', db_size);
+        const prescriptions_table = getTableName('prescriptions', db_size);
+        const billing_table = getTableName('billing', db_size); // Matches screenshot billing_5k
+
         await client.query('BEGIN');
 
-        const { appointment_id, medication_name, dosage, amount } = req.body;
+        // Extracting fields sent from k6
+        // Note: Defaulting charges to 0 if not provided to avoid NaN errors
+        const { 
+            appointment_id, 
+            medication_name, 
+            dosage, 
+            consultation_fee = 50.00, 
+            medicine_charges = 20.00, 
+            lab_charges = 0.00,
+            payment_method = 'Cash' 
+        } = req.body;
 
         // 1. Mark appointment as completed
-        const appointmentQuery = `
-            UPDATE appointments
-            SET status = 'Completed'
-            WHERE appointment_id = $1
-            RETURNING *;
-        `;
-        const appointmentResult = await client.query(appointmentQuery, [appointment_id]);
+        const apptRes = await client.query(
+            `UPDATE ${appointments_table} SET status = 'Completed' WHERE appointment_id = $1 RETURNING *;`,
+            [appointment_id]
+        );
 
-        if (appointmentResult.rows.length === 0) {
+        if (apptRes.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Appointment not found' });
         }
 
-        const appointment = appointmentResult.rows[0];
+        // 2. Issue prescription (Matches ER Diagram columns)
+        await client.query(
+            `INSERT INTO ${prescriptions_table} (appointment_id, medication_name, dosage, issued_date)
+             VALUES ($1, $2, $3, NOW());`,
+            [appointment_id, medication_name, dosage]
+        );
 
-        // 2. Issue prescription
-        const prescriptionQuery = `
-            INSERT INTO prescriptions (appointment_id, patient_id, doctor_id, medication_name, dosage, issued_date)
-            VALUES ($1, $2, $3, $4, $5, NOW())
+        // 3. Create bill (Matches your billing_5k screenshot exactly)
+        const total_amount = parseFloat(consultation_fee) + parseFloat(medicine_charges) + parseFloat(lab_charges);
+        
+        const billQuery = `
+            INSERT INTO ${billing_table} 
+            (appointment_id, consultation_fee, medicine_charges, lab_charges, total_amount, payment_status, payment_method, bill_date)
+            VALUES ($1, $2, $3, $4, $5, 'Paid', $6, NOW())
             RETURNING *;
         `;
-        const prescriptionResult = await client.query(prescriptionQuery, [
-            appointment_id,
-            appointment.patient_id,
-            appointment.doctor_id,
-            medication_name,
-            dosage
+        const billResult = await client.query(billQuery, [
+            appointment_id, 
+            consultation_fee, 
+            medicine_charges, 
+            lab_charges, 
+            total_amount, 
+            payment_method
         ]);
 
-        // 3. Create bill
-        const billQuery = `
-            INSERT INTO bills (appointment_id, patient_id, amount, bill_date, status)
-            VALUES ($1, $2, $3, NOW(), 'Pending')
-            RETURNING *;
-        `;
-        const billResult = await client.query(billQuery, [appointment_id, appointment.patient_id, amount]);
-
         await client.query('COMMIT');
-
-        res.status(200).json({
-            appointment: appointmentResult.rows[0],
-            prescription: prescriptionResult.rows[0],
-            bill: billResult.rows[0]
-        });
+        res.status(200).json(billResult.rows[0]);
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Error in complete checkout:', err.message);
+        console.error('Checkout error:', err.message);
         res.status(500).json({ error: err.message });
     } finally {
         client.release();
@@ -366,9 +432,12 @@ async function completeCheckout(req, res) {
 }
 
 // Placeholder for the old controller function
-async function getRecord() {
+async function getRecord(db_size = '5k') {
     try {
-        const res = await db.query('SELECT appointment_id from patients_5k join appointments_5k on patients_5k.patient_id = appointments_5k.patient_id join doctors_5k on doctors_5k.doctor_id = appointments_5k.doctor_id LIMIT 10;')
+        const patients_table = getTableName('patients', db_size);
+        const appointments_table = getTableName('appointments', db_size);
+        const doctors_table = getTableName('doctors', db_size);
+        const res = await db.query(`SELECT appointment_id from ${patients_table} join ${appointments_table} on ${patients_table}.patient_id = ${appointments_table}.patient_id join ${doctors_table} on ${doctors_table}.doctor_id = ${appointments_table}.doctor_id LIMIT 10;`)
         if (res.rows.length > 0) {
             console.log("Record Found:", res.rows);
             return res.rows;

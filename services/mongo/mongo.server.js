@@ -25,7 +25,7 @@ async function startServer(){
     app.use('/', mongoRoutes);
 
     app.listen(MONGO_SERVER_PORT, () => {
-        console.log(`Running on MONGO_PORT ${MONGO_SERVER_PORT}`)
+        console.log(`Mongo running Running on MONGO_PORT ${MONGO_SERVER_PORT}`)
     }); //on successful start - callback
 
 

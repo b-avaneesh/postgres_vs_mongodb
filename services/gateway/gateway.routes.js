@@ -3,7 +3,7 @@ const path = require('path')
 require('dotenv').config({
     path : path.resolve(__dirname,'.env')
 })
-const { routingMiddleware } = require("./gateway.middleware")
+const { routingMiddleware, endpointInfo } = require("./gateway.controller")
 
 const router = express.Router();
 
@@ -74,5 +74,7 @@ router.post('/system/reset', routingMiddleware);
  * POST /appointments/complete-checkout - Mark done, issue prescription, create bill
  */
 router.post('/appointments/complete-checkout', routingMiddleware);
+
+router.get('/apiinfo',endpointInfo);
 
 module.exports = router;

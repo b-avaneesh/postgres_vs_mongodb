@@ -18,3 +18,67 @@ setVal(seq_obj,new_val) --> tells sequence to continue from here
 nextVal(sqp_obj) --> whats the next value
 
 now sequence cannot identify if a record has been deleted - so is the primary key value, that particular value is forever a 'hole' wrt sequence - will never be generated again from its side.
+
+29-03-2026
+let query = `SELECT p.*,
+                   json_agg(json_build_object(
+                       'appointment_id', a.appointment_id,
+                       'doctor_name', CONCAT(d.first_name, ' ', d.last_name),
+                       'appointment_date', a.appointment_date,
+                       'status', a.status
+                   )) as appointments
+            FROM patients_5k p
+            LEFT JOIN appointments_5k a ON p.patient_id = a.patient_id
+            LEFT JOIN doctors_5k d ON a.doctor_id = d.doctor_id
+            WHERE p.patient_id = 100
+            GROUP BY p.patient_id;`
+
+explainAnalyze(query);
+
+
+    {
+      'QUERY PLAN': 'Seq Scan on patients_5k  (cost=0.00..150.50 rows=2508 width=105) (actual time=0.010..0.518 rows=2508 loops=1)'
+    },
+    { 'QUERY PLAN': "  Filter: ((gender)::text ~~ 'Male'::text)" },
+    { 'QUERY PLAN': '  Rows Removed by Filter: 2492' },
+    { 'QUERY PLAN': '  Buffers: shared hit=88' },
+    { 'QUERY PLAN': 'Planning:' },
+    { 'QUERY PLAN': '  Buffers: shared hit=111' },
+    { 'QUERY PLAN': 'Planning Time: 0.794 ms' },
+    { 'QUERY PLAN': 'Execution Time: 0.588 ms' }
+
+Filter out - rows 0, 3, 5, 6, 7
+
+
+
+07-04-2026
+CREATE SEQUENCE IF NOT EXISTS patients_5k_id_seq;
+
+SELECT setval('patients_5k_id_seq', (SELECT MAX(patient_id) FROM patients_5k));
+
+ALTER TABLE patients_5k 
+ALTER COLUMN patient_id SET DEFAULT nextval('patients_5k_id_seq');
+
+
+CREATE SEQUENCE IF NOT EXISTS patients_5k_id_seq;
+
+SELECT setval('patients_5k_id_seq', (SELECT MAX(patient_id) FROM patients_5k));
+
+ALTER TABLE patients_5k 
+ALTER COLUMN patient_id SET DEFAULT nextval('patients_5k_id_seq');
+
+CREATE SEQUENCE IF NOT EXISTS doctors_5k_id_seq;
+
+SELECT setval('doctors_5k_id_seq', (SELECT MAX(doctor_id) FROM doctors_5k));
+
+ALTER TABLE doctors_5k 
+ALTER COLUMN doctor_id SET DEFAULT nextval('doctors_5k_id_seq');
+
+
+#Pres id
+CREATE SEQUENCE IF NOT EXISTS prescription_5k_id_seq;
+
+SELECT setval('prescription_5k_id_seq', (SELECT MAX(prescription_id) FROM prescriptions_5k));
+
+ALTER TABLE prescriptions_5k 
+ALTER COLUMN prescription_id SET DEFAULT nextval('prescription_5k_id_seq');
