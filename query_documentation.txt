@@ -60,12 +60,6 @@ ALTER TABLE patients_5k
 ALTER COLUMN patient_id SET DEFAULT nextval('patients_5k_id_seq');
 
 
-CREATE SEQUENCE IF NOT EXISTS patients_5k_id_seq;
-
-SELECT setval('patients_5k_id_seq', (SELECT MAX(patient_id) FROM patients_5k));
-
-ALTER TABLE patients_5k 
-ALTER COLUMN patient_id SET DEFAULT nextval('patients_5k_id_seq');
 
 CREATE SEQUENCE IF NOT EXISTS doctors_5k_id_seq;
 
@@ -75,10 +69,46 @@ ALTER TABLE doctors_5k
 ALTER COLUMN doctor_id SET DEFAULT nextval('doctors_5k_id_seq');
 
 
-#Pres id
+
+
 CREATE SEQUENCE IF NOT EXISTS prescription_5k_id_seq;
 
 SELECT setval('prescription_5k_id_seq', (SELECT MAX(prescription_id) FROM prescriptions_5k));
 
 ALTER TABLE prescriptions_5k 
 ALTER COLUMN prescription_id SET DEFAULT nextval('prescription_5k_id_seq');
+
+
+
+
+CREATE SEQUENCE IF NOT EXISTS doctor_specializations_5k_id_seq;
+
+SELECT setval('doctor_specializations_5k_id_seq', (SELECT MAX(id) FROM doctor_specializations_5k));
+
+ALTER TABLE doctor_specializations_5k 
+ALTER COLUMN id SET DEFAULT nextval('doctor_specializations_5k_id_seq');
+
+
+CREATE SEQUENCE IF NOT EXISTS appointments_5k_id_seq;
+
+SELECT setval('appointments_5k_id_seq', COALESCE((SELECT MAX(appointment_id) FROM appointments_5k), 1));
+
+ALTER TABLE appointments_5k 
+ALTER COLUMN appointment_id SET DEFAULT nextval('appointments_5k_id_seq');
+
+
+
+CREATE SEQUENCE IF NOT EXISTS billing_5k_id_seq;
+
+SELECT setval('billing_5k_id_seq', COALESCE((SELECT MAX(bill_id) FROM billing_5k), 1));
+
+ALTER TABLE billing_5k 
+ALTER COLUMN bill_id SET DEFAULT nextval('billing_5k_id_seq');
+
+
+
+
+Gracefully Stopping... press Ctrl+C again to force
+Error response from daemon: ports are not available: exposing port TCP 0.0.0.0:7000 -> 127.0.0.1:0: listen 
+tcp 0.0.0.0:7000: bind: Only one usage of each socket address 
+(protocol/network address/port) is normally permitted.

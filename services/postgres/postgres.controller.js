@@ -1,6 +1,7 @@
 const db = require('./get-client.postgres');
 // const { pool, query } = require('./get-client.postgres')
-
+const {  register,
+  dbQueryTimer} = require('./postgres.metric')
 // Helper functions
 function getTableName(base, db_size) {
     return `${base}_${db_size}`;
@@ -54,16 +55,39 @@ async function addDoctor(req, res) {
     try {
         const db_size = req.query.db_size || '5k';
         const doctors_table = getTableName('doctors', db_size);
-        const { first_name, last_name, specialization, phone_number, email, department } = req.body;
+        const spec_table = getTableName('doctor_specializations', db_size);
 
-        const query = `
-            INSERT INTO ${doctors_table} (first_name, last_name, specialization, phone_number, email, department)
-            VALUES ($1, $2, $3, $4, $5, $6)
+        const { first_name, last_name, specialization, phone_number, email, department_id } = req.body;
+
+        // 1. Insert into doctors (NO specialization, NO department string)
+        const doctorQuery = `
+            INSERT INTO ${doctors_table} 
+            (first_name, last_name, phone, email, department_id)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING *;
         `;
 
-        const result = await db.query(query, [first_name, last_name, specialization, phone_number, email, department]);
-        res.status(201).json(result.rows[0]);
+        const doctorResult = await db.query(doctorQuery, [
+            first_name,
+            last_name,
+            phone_number,
+            email,
+            department_id
+        ]);
+
+        const doctor = doctorResult.rows[0];
+
+        // 2. Insert specialization separately (KEY FIX)
+        if (specialization) {
+            const specQuery = `
+                INSERT INTO ${spec_table} (doctor_id, specialization)
+                VALUES ($1, $2);
+            `;
+            await db.query(specQuery, [doctor.doctor_id, specialization]);
+        }
+
+        res.status(201).json(doctor);
+
     } catch (err) {
         console.error('Error adding doctor:', err.message);
         res.status(500).json({ error: err.message });
@@ -74,6 +98,8 @@ async function addDoctor(req, res) {
  * POST /appointments - Book a new appointment
  */
 async function addAppointment(req, res) {
+    const end = dbQueryTimer.startTimer({ operation: 'add_appointment' });
+
     try {
         const db_size = req.query.db_size || '5k';
         const appointments_table = getTableName('appointments', db_size);
@@ -92,6 +118,8 @@ async function addAppointment(req, res) {
     } catch (err) {
         console.error('Error adding appointment:', err.message);
         res.status(500).json({ error: err.message });
+    }finally{
+        end();
     }
 }
 
@@ -99,6 +127,8 @@ async function addAppointment(req, res) {
  * GET /patients/:id - Retrieve a specific patient's profile and history
  */
 async function getPatient(req, res) {
+    const end = dbQueryTimer.startTimer({ operation: 'get_patient' });
+
     try {
         const db_size = req.query.db_size || '5k';
         const patients_table = getTableName('patients', db_size);
@@ -129,6 +159,8 @@ async function getPatient(req, res) {
     } catch (err) {
         console.error('Error fetching patient:', err.message);
         res.status(500).json({ error: err.message });
+    }finally{
+        end();
     }
 }
 
@@ -170,7 +202,7 @@ async function deletePatient(req, res) {
         const patients_table = getTableName('patients', db_size);
         const appointments_table = getTableName('appointments', db_size);
         const prescriptions_table = getTableName('prescriptions', db_size);
-        const bills_table = getTableName('bills', db_size);
+        const bills_table = getTableName('billing', db_size);
         const patient_id = getPatientId(req);
 
         // Delete appointments first (foreign key constraint)
@@ -179,7 +211,7 @@ async function deletePatient(req, res) {
         // Delete prescriptions
         await db.query(`DELETE FROM ${prescriptions_table} WHERE patient_id = $1`, [patient_id]);
 
-        // Delete bills
+        // Delete billing
         await db.query(`DELETE FROM ${bills_table} WHERE patient_id = $1`, [patient_id]);
 
         // Delete patient
@@ -202,35 +234,47 @@ async function deletePatient(req, res) {
  * GET /analytics/revenue-report - Generates revenue reports by doctor or department
  */
 async function revenueReport(req, res) {
+    const end = dbQueryTimer.startTimer({ operation: 'revenue_report' });
+
     try {
         const db_size = req.query.db_size || '5k';
+
         const doctors_table = getTableName('doctors', db_size);
         const appointments_table = getTableName('appointments', db_size);
-        const bills_table = getTableName('bills', db_size);
-        const { doctor_id, department } = req.query;
+        const bills_table = getTableName('billing', db_size);
+
+        const dept_table = 'departments'; // shared table
+
+        const { doctor_id, department } = req.body;
 
         let query = `
             SELECT
                 d.doctor_id,
                 CONCAT(d.first_name, ' ', d.last_name) as doctor_name,
-                d.department,
+                dep.department_name,
                 COUNT(b.bill_id) as total_appointments,
-                SUM(b.amount) as total_revenue
+                COALESCE(SUM(b.consultation_fee), 0) as total_revenue
             FROM ${doctors_table} d
-            LEFT JOIN ${appointments_table} a ON d.doctor_id = a.doctor_id
-            LEFT JOIN ${bills_table} b ON a.appointment_id = b.appointment_id
+            LEFT JOIN ${dept_table} dep 
+                ON d.department_id = dep.department_id
+            LEFT JOIN ${appointments_table} a 
+                ON d.doctor_id = a.doctor_id
+            LEFT JOIN ${bills_table} b 
+                ON a.appointment_id = b.appointment_id
         `;
 
         let params = [];
         let conditions = [];
 
+        // filter by doctor
         if (doctor_id) {
             conditions.push(`d.doctor_id = $${params.length + 1}`);
             params.push(doctor_id);
         }
 
+        // filter by department name (normalized now)
         if (department) {
-            conditions.push(`d.department = $${params.length + 1}`);
+            conditions.push(`dep.department_name = $${params.length + 1}`);
             params.push(department);
         }
 
@@ -238,14 +282,19 @@ async function revenueReport(req, res) {
             query += ' WHERE ' + conditions.join(' AND ');
         }
 
-        query += ` GROUP BY d.doctor_id, d.first_name, d.last_name, d.department
-                  ORDER BY total_revenue DESC;`;
+        query += `
+            GROUP BY d.doctor_id, d.first_name, d.last_name, dep.department_name
+            ORDER BY total_revenue DESC;
+        `;
 
         const result = await db.query(query, params);
         res.status(200).json(result.rows);
+
     } catch (err) {
         console.error('Error generating revenue report:', err.message);
         res.status(500).json({ error: err.message });
+    } finally {
+        end();
     }
 }
 
@@ -334,7 +383,7 @@ async function seedData(req, res) {
 async function resetDatabase(req, res) {
     try {
         const db_size = req.query.db_size || '5k';
-        const bills_table = getTableName('bills', db_size);
+        const bills_table = getTableName('billing', db_size);
         const prescriptions_table = getTableName('prescriptions', db_size);
         const appointments_table = getTableName('appointments', db_size);
         const patients_table = getTableName('patients', db_size);
@@ -361,6 +410,7 @@ async function resetDatabase(req, res) {
  */
 async function completeCheckout(req, res) {
     const client = await db.pool.connect();
+    const end = dbQueryTimer.startTimer({ operation: 'complete_checkout' });
     try {
         // console.log("within compeltecheckout");
         // res.status(200).json({msg:"hmm seems to work till here"});
@@ -427,17 +477,21 @@ async function completeCheckout(req, res) {
         console.error('Checkout error:', err.message);
         res.status(500).json({ error: err.message });
     } finally {
+        end();
         client.release();
     }
 }
 
 // Placeholder for the old controller function
-async function getRecord(db_size = '5k') {
+async function getRecord() {
     try {
+        const db_size = req.query.db_size || '5k';
         const patients_table = getTableName('patients', db_size);
         const appointments_table = getTableName('appointments', db_size);
         const doctors_table = getTableName('doctors', db_size);
-        const res = await db.query(`SELECT appointment_id from ${patients_table} join ${appointments_table} on ${patients_table}.patient_id = ${appointments_table}.patient_id join ${doctors_table} on ${doctors_table}.doctor_id = ${appointments_table}.doctor_id LIMIT 10;`)
+        const res = await db.query(`SELECT appointment_id from ${patients_table} 
+            join ${appointments_table} on ${patients_table}.patient_id = ${appointments_table}.patient_id 
+            join ${doctors_table} on ${doctors_table}.doctor_id = ${appointments_table}.doctor_id LIMIT 10;`)
         if (res.rows.length > 0) {
             console.log("Record Found:", res.rows);
             return res.rows;

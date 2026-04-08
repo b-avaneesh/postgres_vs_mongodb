@@ -62,7 +62,7 @@ stream.end()
 stream = fs.createWriteStream(`datasets/${SIZE}/doctors${SIZE}.csv`)
 
 stream.write(
-"doctor_id,first_name,last_name,specialization,phone,email,years_of_experience,license_number,department,created_at\n"
+"doctor_id,first_name,last_name,phone,email,years_of_experience,license_number,department_id,created_at\n"
 )
 
 for (let i = 1; i <= DOCTORS; i++) {
@@ -71,16 +71,58 @@ for (let i = 1; i <= DOCTORS; i++) {
   i,
   faker.person.firstName(),
   faker.person.lastName(),
-  faker.helpers.arrayElement(['Cardiology','Neurology','Orthopedics','Dermatology','Pediatrics']),
   faker.phone.number({ style: 'international' }),
   faker.internet.email(),
   faker.number.int({min:1,max:40}),
   faker.string.alphanumeric(10),
-  faker.helpers.arrayElement(['General','Surgery','Emergency','Outpatient']),
+  faker.number.int({min:1,max:4}), // FK to departments
   new Date().toISOString()
  ]
 
  stream.write(row.join(",") + "\n")
+}
+
+stream.end()
+
+/* ---------------- DEPARTMENTS ---------------- */
+
+stream = fs.createWriteStream(`datasets/${SIZE}/departments${SIZE}.csv`)
+
+stream.write("department_id,department_name\n")
+
+const departments = ['General','Surgery','Emergency','Outpatient']
+
+departments.forEach((dept, index) => {
+ stream.write(`${index + 1},${dept}\n`)
+})
+
+stream.end()
+
+/* ---------------- DOCTOR SPECIALIZATIONS ---------------- */
+
+stream = fs.createWriteStream(`datasets/${SIZE}/doctor_specializations${SIZE}.csv`)
+
+stream.write("id,doctor_id,specialization\n")
+
+let specId = 1
+
+const specializations = ['Cardiology','Neurology','Orthopedics','Dermatology','Pediatrics']
+
+for (let i = 1; i <= DOCTORS; i++) {
+
+ // each doctor gets 1–2 specializations
+ const numSpecs = faker.number.int({min:1,max:2})
+ const chosenSpecs = faker.helpers.arrayElements(specializations, numSpecs)
+
+ for (let spec of chosenSpecs) {
+  const row = [
+    specId++,
+    i,          // doctor_id FK
+    spec
+  ]
+
+  stream.write(row.join(",") + "\n")
+ }
 }
 
 stream.end()

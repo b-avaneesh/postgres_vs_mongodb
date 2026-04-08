@@ -57,6 +57,21 @@ router.post('/system/reset', resetDatabase);
 // ============= Transactional Endpoint =============
 
 // POST /appointments/complete-checkout - Mark done, issue prescription, create bill
-router.post('/appointments/complete-checkout', completeCheckout);
+router.post('/appointments/complete-checkout/', completeCheckout);
+
+
+const { register } = require('./postgres.metric'); // Import the registry you created
+router.get('/metrics', async (req, res) => {
+  try {
+    // 1. Set the correct header for Prometheus (text/plain; version=0.0.4)
+    res.set('Content-Type', register.contentType);
+
+    // 2. Send the metrics data as a string
+    const metrics = await register.metrics();
+    res.end(metrics);
+  } catch (err) {
+    res.status(500).send(err);
+  }
+});
 
 module.exports = router;

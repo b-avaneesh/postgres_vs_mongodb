@@ -1,0 +1,181 @@
+/* ===================== DROP ALL TABLES ===================== */
+
+-- 5K
+DROP TABLE IF EXISTS billing_5k CASCADE;
+DROP TABLE IF EXISTS prescriptions_5k CASCADE;
+DROP TABLE IF EXISTS appointments_5k CASCADE;
+DROP TABLE IF EXISTS doctor_specializations_5k CASCADE;
+DROP TABLE IF EXISTS doctors_5k CASCADE;
+DROP TABLE IF EXISTS patients_5k CASCADE;
+
+-- 10K
+DROP TABLE IF EXISTS billing_10k CASCADE;
+DROP TABLE IF EXISTS prescriptions_10k CASCADE;
+DROP TABLE IF EXISTS appointments_10k CASCADE;
+DROP TABLE IF EXISTS doctor_specializations_10k CASCADE;
+DROP TABLE IF EXISTS doctors_10k CASCADE;
+DROP TABLE IF EXISTS patients_10k CASCADE;
+
+-- 25K
+DROP TABLE IF EXISTS billing_25k CASCADE;
+DROP TABLE IF EXISTS prescriptions_25k CASCADE;
+DROP TABLE IF EXISTS appointments_25k CASCADE;
+DROP TABLE IF EXISTS doctor_specializations_25k CASCADE;
+DROP TABLE IF EXISTS doctors_25k CASCADE;
+DROP TABLE IF EXISTS patients_25k CASCADE;
+
+-- shared
+DROP TABLE IF EXISTS departments CASCADE;
+
+
+/* ===================== DEPARTMENTS (SHARED) ===================== */
+
+CREATE TABLE departments (
+    department_id INT PRIMARY KEY,
+    department_name VARCHAR(100)
+);
+
+INSERT INTO departments VALUES
+(1,'General'),
+(2,'Surgery'),
+(3,'Emergency'),
+(4,'Outpatient');
+
+
+/* ===================== TEMPLATE FUNCTION (COPY PASTE LOGIC) ===================== */
+
+-- ---------- PATIENTS ----------
+CREATE TABLE patients_5k (
+    patient_id INT PRIMARY KEY,
+    first_name VARCHAR(50),
+    last_name VARCHAR(50),
+    date_of_birth DATE,
+    gender VARCHAR(10),
+    phone VARCHAR(15),
+    email VARCHAR(100),
+    address TEXT,
+    blood_group VARCHAR(5),
+    emergency_contact VARCHAR(15),
+    created_at TIMESTAMP
+);
+
+CREATE TABLE patients_10k (LIKE patients_5k INCLUDING ALL);
+CREATE TABLE patients_25k (LIKE patients_5k INCLUDING ALL);
+
+
+-- ---------- DOCTORS (FIXED) ----------
+CREATE TABLE doctors_5k (
+    doctor_id INT PRIMARY KEY,
+    first_name VARCHAR(50),
+    last_name VARCHAR(50),
+    phone VARCHAR(15),
+    email VARCHAR(100),
+    years_of_experience INT,
+    license_number VARCHAR(50),
+    department_id INT,
+    created_at TIMESTAMP,
+
+    FOREIGN KEY (department_id) REFERENCES departments(department_id)
+);
+
+CREATE TABLE doctors_10k (LIKE doctors_5k INCLUDING ALL);
+CREATE TABLE doctors_25k (LIKE doctors_5k INCLUDING ALL);
+
+
+-- ---------- DOCTOR SPECIALIZATIONS ----------
+CREATE TABLE doctor_specializations_5k (
+    id INT PRIMARY KEY,
+    doctor_id INT,
+    specialization VARCHAR(100),
+
+    FOREIGN KEY (doctor_id) REFERENCES doctors_5k(doctor_id)
+);
+
+CREATE TABLE doctor_specializations_10k (
+    LIKE doctor_specializations_5k INCLUDING ALL,
+    FOREIGN KEY (doctor_id) REFERENCES doctors_10k(doctor_id)
+);
+
+CREATE TABLE doctor_specializations_25k (
+    LIKE doctor_specializations_5k INCLUDING ALL,
+    FOREIGN KEY (doctor_id) REFERENCES doctors_25k(doctor_id)
+);
+
+
+-- ---------- APPOINTMENTS ----------
+CREATE TABLE appointments_5k (
+    appointment_id INT PRIMARY KEY,
+    patient_id INT,
+    doctor_id INT,
+    appointment_date DATE,
+    appointment_time TIME,
+    status VARCHAR(20),
+    reason_for_visit TEXT,
+    created_at TIMESTAMP,
+
+    FOREIGN KEY (patient_id) REFERENCES patients_5k(patient_id),
+    FOREIGN KEY (doctor_id) REFERENCES doctors_5k(doctor_id)
+);
+
+CREATE TABLE appointments_10k (
+    LIKE appointments_5k INCLUDING ALL,
+    FOREIGN KEY (patient_id) REFERENCES patients_10k(patient_id),
+    FOREIGN KEY (doctor_id) REFERENCES doctors_10k(doctor_id)
+);
+
+CREATE TABLE appointments_25k (
+    LIKE appointments_5k INCLUDING ALL,
+    FOREIGN KEY (patient_id) REFERENCES patients_25k(patient_id),
+    FOREIGN KEY (doctor_id) REFERENCES doctors_25k(doctor_id)
+);
+
+
+-- ---------- PRESCRIPTIONS ----------
+CREATE TABLE prescriptions_5k (
+    prescription_id INT PRIMARY KEY,
+    appointment_id INT,
+    medication_name VARCHAR(100),
+    dosage VARCHAR(50),
+    frequency VARCHAR(50),
+    duration_days INT,
+    notes TEXT,
+    issued_date DATE,
+
+    FOREIGN KEY (appointment_id) REFERENCES appointments_5k(appointment_id)
+);
+
+CREATE TABLE prescriptions_10k (
+    LIKE prescriptions_5k INCLUDING ALL,
+    FOREIGN KEY (appointment_id) REFERENCES appointments_10k(appointment_id)
+);
+
+CREATE TABLE prescriptions_25k (
+    LIKE prescriptions_5k INCLUDING ALL,
+    FOREIGN KEY (appointment_id) REFERENCES appointments_25k(appointment_id)
+);
+
+
+-- ---------- BILLING ----------
+CREATE TABLE billing_5k (
+    bill_id INT PRIMARY KEY,
+    appointment_id INT,
+    consultation_fee DECIMAL(10,2),
+    medicine_charges DECIMAL(10,2),
+    lab_charges DECIMAL(10,2),
+    total_amount DECIMAL(10,2),
+    payment_status VARCHAR(20),
+    payment_method VARCHAR(20),
+    bill_date TIMESTAMP,
+
+    FOREIGN KEY (appointment_id) REFERENCES appointments_5k(appointment_id)
+);
+
+CREATE TABLE billing_10k (
+    LIKE billing_5k INCLUDING ALL,
+    FOREIGN KEY (appointment_id) REFERENCES appointments_10k(appointment_id)
+);
+
+CREATE TABLE billing_25k (
+    LIKE billing_5k INCLUDING ALL,
+    FOREIGN KEY (appointment_id) REFERENCES appointments_25k(appointment_id)
+);

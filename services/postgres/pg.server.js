@@ -7,30 +7,6 @@ require('dotenv').config({
     path: path.resolve(__dirname, '.env')
 });
 
-// //environment variables
-// const { PG_SERVER_PORT } = process.env;
-
-// const app = express();
-
-// app.use(
-//     express.json()
-// );
-
-
-// //setting up app
-// async function startServer(){
-//     await isClientUp();
-    
-//     app.listen(PG_SERVER_PORT, () => {
-//         console.log(`Running on PG_PORT ${PG_SERVER_PORT}`)
-//     }); //on successful start - callback
-
-//     await getRecord();
-    
-// }
-
-
-// startServer();
 
 const express = require('express');
 const { getRecord } = require('./postgres.controller');
@@ -42,11 +18,11 @@ app.use(express.json());
 const PORT = process.env.PG_SERVER_PORT || 7000;
 
 async function startServer() {
-    // Mount routes
+    // Mount routes - home is localhost:7000/
     app.use('/', postgresRoutes);
 
     app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
+        console.log(`Postgres Server running on port ${PORT}`);
     });
 
     // Test a record fetch immediately

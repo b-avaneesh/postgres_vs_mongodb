@@ -5,8 +5,7 @@ require('dotenv').config({
   path: path.resolve(__dirname, '.env')
 });
 
-const { MONGO_CONNECTION_STRING } = process.env;
-
+const MONGO_CONNECTION_STRING = process.env.MONGO_URL || process.env.MONGO_CONNECTION_STRING;
 let isConnected = false;
 
 async function connectMongo(){

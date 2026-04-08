@@ -21,8 +21,12 @@ const routingMiddleware = (req, res, next) => {
     // Determine target backend
     const target = database === 'mongo'
         ? 'http://localhost:8000/'
-        : 'http://localhost:7000/';
+        : 'http://localhost:7000/'; 
 
+    //since hosting in docker - needs to be routed within it.
+    // const target = database === 'mongo'
+    // ? 'http://host.docker.internal:8000'
+    // : 'http://host.docker.internal:7000';
     console.log(`[Gateway Middleware] ${req.method} ${req.path} → ${target.replace('/', '')} (db=${database})`);
 
     // The proxy "hijacks" the response, so it never reaches
