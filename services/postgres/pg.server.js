@@ -14,6 +14,10 @@ const postgresRoutes = require('./postgres.routes');
 
 const app = express();
 app.use(express.json());
+app.use(express.static(path.resolve(__dirname, '../../frontend')));
+app.get('/', (_req, res) => {
+    res.sendFile(path.resolve(__dirname, '../../frontend/login.html'));
+});
 
 const PORT = process.env.PG_SERVER_PORT || 7000;
 

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hospital Login</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="login-page">
+  <main class="shell">
+    <section class="panel auth-panel">
+      <h1>Hospital Access</h1>
+      <p class="muted">Sign in with your local PostgreSQL user account.</p>
+      <form id="login-form" class="stack">
+        <label>
+          <span>Username</span>
+          <input type="text" id="username" required>
+        </label>
+        <label>
+          <span>Password</span>
+          <input type="password" id="password" required>
+        </label>
+        <button type="submit">Login</button>
+      </form>
+      <p id="login-error" class="error-text"></p>
+    </section>
+  </main>
+  <script src="/script.js"></script>
+</body>
+</html>

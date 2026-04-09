@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operations Console</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body data-dashboard="superadmin">
+  <header class="app-header">
+    <div class="brand-block">
+      <p class="eyebrow">Operations Console</p>
+      <h1>Reception And Oversight Dashboard</h1>
+      <p id="welcome-text" class="muted"></p>
+    </div>
+    <div class="header-actions">
+      <div class="header-chip accent">Superadmin Access</div>
+      <button id="logout-button" class="ghost">Logout</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="hero-card">
+      <div>
+        <p class="eyebrow">Command Center</p>
+        <h2>Handle front-desk tasks while keeping finance and operations visible</h2>
+        <p class="muted">Search patients, schedule visits, review billing, and monitor workload from one guided workspace.</p>
+      </div>
+      <div class="hero-metrics">
+        <div class="metric-card">
+          <span class="metric-label">Reception</span>
+          <strong>Patient search and booking</strong>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Oversight</span>
+          <strong>Revenue, billing, workload</strong>
+        </div>
+      </div>
+    </section>
+
+    <nav class="tab-bar">
+      <button class="tab-button active" data-tab-target="super-booking-tab">Reception Desk</button>
+      <button class="tab-button" data-tab-target="super-appointments-tab">Appointments</button>
+      <button class="tab-button" data-tab-target="super-patients-tab">Patient Records</button>
+      <button class="tab-button" data-tab-target="super-analytics-tab">Analytics</button>
+      <button class="tab-button" data-tab-target="super-finance-tab">Billing & Prescriptions</button>
+      <button class="tab-button" data-tab-target="super-admin-tab">Admin Controls</button>
+    </nav>
+
+    <section class="tab-panel active" id="super-booking-tab">
+      <div class="workflow-grid">
+        <section class="panel feature-panel">
+          <div class="panel-heading">
+            <p class="eyebrow">Step 1</p>
+            <h3>Select Patient</h3>
+          </div>
+          <label class="field-label" for="patient-search-input">Search patient by name, phone, or email</label>
+          <input id="patient-search-input" type="text" placeholder="Start typing a name, phone number, or email">
+          <div id="patient-search-results" class="search-results hidden"></div>
+          <div id="selected-patient-card" class="selected-card hidden">
+            <p class="eyebrow">Selected Patient</p>
+            <h4 id="selected-patient-name">No patient selected</h4>
+            <p id="selected-patient-meta" class="muted"></p>
+          </div>
+          <button class="secondary-action" data-tab-jump="super-admin-tab">Need a new record? Open patient registration</button>
+        </section>
+
+        <section class="panel feature-panel">
+          <div class="panel-heading">
+            <p class="eyebrow">Step 2</p>
+            <h3>Book Appointment</h3>
+          </div>
+          <form id="add-appointment-form" class="stack">
+            <input id="selected-patient-id" name="patient_id" type="hidden">
+            <input id="selected-doctor-id" name="doctor_id" type="hidden">
+            <label>
+              <span>Department</span>
+              <select id="department-select">
+                <option value="">All departments</option>
+              </select>
+            </label>
+            <label>
+              <span>Doctor search</span>
+              <input id="doctor-search-input" type="text" placeholder="Search doctor by name">
+            </label>
+            <div class="two-col">
+              <label>
+                <span>Date</span>
+                <input name="appointment_date" type="date" required>
+              </label>
+              <label>
+                <span>Time</span>
+                <input name="appointment_time" type="time" required>
+              </label>
+            </div>
+            <label>
+              <span>Reason for visit</span>
+              <textarea name="reason_for_visit" placeholder="Consultation, follow-up, medication review..."></textarea>
+            </label>
+            <div id="doctor-search-results" class="search-results hidden"></div>
+            <div id="selected-doctor-card" class="selected-card hidden">
+              <p class="eyebrow">Selected Doctor</p>
+              <h4 id="selected-doctor-name">No doctor selected</h4>
+              <p id="selected-doctor-meta" class="muted"></p>
+              <p id="doctor-availability-message" class="status-text"></p>
+            </div>
+            <button type="submit">Book Appointment</button>
+          </form>
+          <p id="appointment-form-message" class="status-text"></p>
+        </section>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="super-appointments-tab">
+      <section class="panel panel-spacious">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Appointments</p>
+            <h3>View and manage scheduled visits</h3>
+          </div>
+          <button id="load-appointments-button">Load Appointments</button>
+        </div>
+        <div class="toolbar-row">
+          <input id="appointments-search-input" type="text" placeholder="Search by appointment, patient, doctor, status, or reason">
+          <input id="appointments-start-date" type="date" aria-label="Appointments start date">
+          <input id="appointments-end-date" type="date" aria-label="Appointments end date">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Patient</th>
+                <th>Doctor</th>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="appointments-table-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination-bar">
+          <button id="appointments-prev-page" class="secondary-action">Previous</button>
+          <span id="appointments-page-label" class="helper-text">Page 1</span>
+          <button id="appointments-next-page" class="secondary-action">Next</button>
+        </div>
+        <p id="appointments-message" class="status-text"></p>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="super-patients-tab">
+      <section class="panel panel-spacious">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Patient Directory</p>
+            <h3>Search and inspect patient records</h3>
+          </div>
+          <button id="load-patients-button">Load Patient Directory</button>
+        </div>
+        <div class="toolbar-row">
+          <input id="patient-directory-search" type="text" placeholder="Search patients by name, phone, or email">
+          <button id="patient-directory-search-button" class="secondary-action">Search</button>
+        </div>
+        <div class="split-layout">
+          <div class="table-card">
+            <p class="helper-text">Click any patient row to open their details.</p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Email</th>
+                  </tr>
+                </thead>
+                <tbody id="patients-table-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-bar">
+              <button id="patients-prev-page" class="secondary-action">Previous</button>
+              <span id="patients-page-label" class="helper-text">Page 1</span>
+              <button id="patients-next-page" class="secondary-action">Next</button>
+            </div>
+          </div>
+          <aside class="detail-pane">
+            <div id="patient-detail" class="detail-box structured-detail">Select a patient record to see visit history.</div>
+            <div class="detail-actions">
+              <button id="delete-patient-button" class="danger">Remove Patient</button>
+              <p id="patient-directory-message" class="status-text"></p>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="super-analytics-tab">
+      <div class="analytics-grid">
+        <section class="panel panel-spacious">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Revenue Report</p>
+              <h3>Doctor-wise collections</h3>
+            </div>
+            <button id="load-revenue-button">Refresh Revenue</button>
+          </div>
+          <div class="inline-form revenue-filters">
+            <input id="revenue-department-filter" type="text" placeholder="Department">
+            <input id="revenue-start-date" type="date" aria-label="Revenue start date">
+            <input id="revenue-end-date" type="date" aria-label="Revenue end date">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Doctor</th>
+                  <th>Department</th>
+                  <th>Total Appointments</th>
+                  <th>Total Revenue</th>
+                </tr>
+              </thead>
+              <tbody id="revenue-table-body"></tbody>
+            </table>
+          </div>
+          <div class="pagination-bar">
+            <button id="revenue-prev-page" class="secondary-action">Previous</button>
+            <span id="revenue-page-label" class="helper-text">Page 1</span>
+            <button id="revenue-next-page" class="secondary-action">Next</button>
+          </div>
+        </section>
+
+        <section class="panel panel-spacious">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Workload</p>
+              <h3>Doctor schedule load</h3>
+            </div>
+            <button id="load-workload-button">Refresh Workload</button>
+          </div>
+          <div class="toolbar-row">
+            <input id="workload-doctor-filter" type="text" placeholder="Search doctor name">
+            <input id="workload-department-filter" type="text" placeholder="Department">
+            <input id="workload-start-date" type="date" aria-label="Workload start date">
+            <input id="workload-end-date" type="date" aria-label="Workload end date">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Doctor</th>
+                  <th>Department</th>
+                  <th>Specialization</th>
+                  <th>Unique Patients</th>
+                  <th>Total Appointments</th>
+                  <th>Completed</th>
+                  <th>Scheduled</th>
+                </tr>
+              </thead>
+              <tbody id="workload-table-body"></tbody>
+            </table>
+          </div>
+          <div class="pagination-bar">
+            <button id="workload-prev-page" class="secondary-action">Previous</button>
+            <span id="workload-page-label" class="helper-text">Page 1</span>
+            <button id="workload-next-page" class="secondary-action">Next</button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="super-finance-tab">
+      <div class="analytics-grid">
+        <section class="panel panel-spacious">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Billing</p>
+              <h3>Recent billing records</h3>
+            </div>
+            <button id="load-billing-button">Load Billing</button>
+          </div>
+          <div class="toolbar-row">
+            <input id="billing-search-input" type="text" placeholder="Search by appointment, patient, doctor, status, or method">
+            <input id="billing-start-date" type="date" aria-label="Billing start date">
+            <input id="billing-end-date" type="date" aria-label="Billing end date">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Appointment</th>
+                  <th>Patient</th>
+                  <th>Doctor</th>
+                  <th>Total Amount</th>
+                  <th>Payment Status</th>
+                  <th>Payment Method</th>
+                </tr>
+              </thead>
+              <tbody id="billing-table-body"></tbody>
+            </table>
+          </div>
+          <div class="pagination-bar">
+            <button id="billing-prev-page" class="secondary-action">Previous</button>
+            <span id="billing-page-label" class="helper-text">Page 1</span>
+            <button id="billing-next-page" class="secondary-action">Next</button>
+          </div>
+        </section>
+
+        <section class="panel panel-spacious">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Prescriptions</p>
+              <h3>Issued prescriptions</h3>
+            </div>
+            <button id="load-prescriptions-button">Load Prescriptions</button>
+          </div>
+          <div class="toolbar-row">
+            <input id="prescriptions-search-input" type="text" placeholder="Search by appointment, patient, doctor, medication, or dosage">
+            <input id="prescriptions-start-date" type="date" aria-label="Prescription start date">
+            <input id="prescriptions-end-date" type="date" aria-label="Prescription end date">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Appointment</th>
+                  <th>Patient</th>
+                  <th>Doctor</th>
+                  <th>Medication</th>
+                  <th>Dosage</th>
+                  <th>Issued Date</th>
+                </tr>
+              </thead>
+              <tbody id="prescriptions-table-body"></tbody>
+            </table>
+          </div>
+          <div class="pagination-bar">
+            <button id="prescriptions-prev-page" class="secondary-action">Previous</button>
+            <span id="prescriptions-page-label" class="helper-text">Page 1</span>
+            <button id="prescriptions-next-page" class="secondary-action">Next</button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="super-admin-tab">
+      <div class="workflow-grid">
+        <section class="panel panel-spacious">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Patient Registration</p>
+              <h3>Add a new patient profile</h3>
+            </div>
+          </div>
+          <form id="add-patient-form" class="form-grid">
+            <label>
+              <span>First name</span>
+              <input name="first_name" placeholder="First name" required>
+            </label>
+            <label>
+              <span>Last name</span>
+              <input name="last_name" placeholder="Last name" required>
+            </label>
+          <label>
+            <span>Date of birth</span>
+            <input name="date_of_birth" type="date" max="">
+          </label>
+            <label>
+              <span>Gender</span>
+              <input name="gender" placeholder="Gender">
+            </label>
+          <label>
+            <span>Phone number</span>
+            <input name="phone" placeholder="Phone number">
+          </label>
+            <label>
+              <span>Email</span>
+              <input name="email" type="email" placeholder="Email">
+            </label>
+            <label class="full-span">
+              <span>Address</span>
+              <textarea name="address" placeholder="Address"></textarea>
+            </label>
+            <div class="full-span form-actions">
+              <button type="submit">Add Patient</button>
+            </div>
+          </form>
+          <p id="patient-form-message" class="status-text"></p>
+        </section>
+
+        <section class="panel panel-spacious">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Doctor Administration</p>
+              <h3>Remove a doctor record</h3>
+            </div>
+          </div>
+          <label>
+            <span>Department</span>
+            <select id="delete-department-select">
+              <option value="">All departments</option>
+            </select>
+          </label>
+          <label>
+            <span>Find doctor to remove</span>
+            <input id="delete-doctor-search-input" type="text" placeholder="Search doctor by name">
+          </label>
+          <div id="delete-doctor-results" class="search-results hidden"></div>
+          <div id="delete-doctor-card" class="selected-card hidden">
+            <p class="eyebrow">Doctor Selected For Removal</p>
+            <h4 id="delete-doctor-name">No doctor selected</h4>
+            <p id="delete-doctor-meta" class="muted"></p>
+          </div>
+          <button id="delete-doctor-button" class="danger">Delete Doctor</button>
+          <p id="doctor-delete-message" class="status-text"></p>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="/script.js"></script>
+</body>
+</html>

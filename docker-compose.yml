@@ -13,7 +13,8 @@ services:
       # Updated to use postgres:postgres and the correct DB name
       #- POSTGRES_URL=postgres://postgres:postgres@postgres:5432/dbs_project
       #- POSTGRES_URL=postgres://postgres:postgres@host.docker.internal:5432/dbs_project #had to change this omg - looks into dev pg db.
-      - MONGO_URL=mongodb://mongo:27017/healthcare
+      #- MONGO_URL=mongodb://mongo:27017/healthcare
+      - MONGO_URL=mongodb://host.docker.internal:27017/healthcare
       # Explicitly setting these so the 'pg' library finds them
       - PG_HOST=host.docker.internal
       - PG_USER=postgres

@@ -1,77 +1,84 @@
 const express = require('express');
 const router = express.Router();
 const {
+    login,
     addPatient,
+    getPatients,
+    searchPatients,
     addDoctor,
+    getDoctors,
+    getDepartments,
+    searchDoctors,
+    checkDoctorAvailability,
+    deleteDoctor,
     addAppointment,
+    getAppointments,
     getPatient,
     updateAppointment,
+    deleteAppointment,
     deletePatient,
     revenueReport,
     doctorWorkload,
     medicationTrends,
+    getBilling,
+    getBillingByAppointment,
+    getPrescriptions,
+    getPrescriptionByAppointment,
     seedData,
     resetDatabase,
     completeCheckout
 } = require('./postgres.controller');
+const { register } = require('./postgres.metric');
+const {
+    loadUserFromHeaders,
+    requireAdmin,
+    requireSuperadmin
+} = require('./auth.middleware');
 
-// ============= Primary Endpoints =============
+router.use(loadUserFromHeaders);
 
-// POST /patients - Add a new patient record
-router.post('/patients', addPatient);
+router.post('/login', login);
 
-// POST /doctors - Add a new doctor profile
-router.post('/doctors', addDoctor);
+router.post('/patients', requireAdmin, addPatient);
+router.get('/patients', requireAdmin, getPatients);
+router.get('/patients/search', requireAdmin, searchPatients);
+router.get('/patients/:id', requireAdmin, getPatient);
+router.delete('/patients/:id', requireAdmin, deletePatient);
 
-// POST /appointments - Book a new appointment
-router.post('/appointments', addAppointment);
+router.post('/doctors', requireSuperadmin, addDoctor);
+router.get('/doctors', requireAdmin, getDoctors);
+router.get('/doctors/search', requireAdmin, searchDoctors);
+router.get('/doctors/:id/availability', requireAdmin, checkDoctorAvailability);
+router.delete('/doctors/:id', requireSuperadmin, deleteDoctor);
+router.get('/departments', requireAdmin, getDepartments);
 
-// GET /patients/:id - Retrieve a specific patient's profile and history
-router.get('/patients/:id', getPatient);
+router.post('/appointments', requireAdmin, addAppointment);
+router.get('/appointments', requireAdmin, getAppointments);
+router.put('/appointments/:id', requireAdmin, updateAppointment);
+router.delete('/appointments/:id', requireAdmin, deleteAppointment);
+router.post('/appointments/complete-checkout/', requireSuperadmin, completeCheckout);
 
-// PUT /appointments/:id - Update appointment status
-router.put('/appointments/:id', updateAppointment);
+router.get('/analytics/revenue-report', requireSuperadmin, revenueReport);
+router.get('/analytics/doctor-workload', requireSuperadmin, doctorWorkload);
+router.get('/analytics/medication-trends', requireSuperadmin, medicationTrends);
 
-// DELETE /patients/:id - Remove a patient and associated records
-router.delete('/patients/:id', deletePatient);
+router.get('/billing', requireSuperadmin, getBilling);
+router.get('/billing/:appointment_id', requireSuperadmin, getBillingByAppointment);
 
-// ============= Analytical Endpoints =============
+router.get('/prescriptions', requireSuperadmin, getPrescriptions);
+router.get('/prescriptions/:appointment_id', requireSuperadmin, getPrescriptionByAppointment);
 
-// GET /analytics/revenue-report - Revenue reports by doctor or department
-router.get('/analytics/revenue-report', revenueReport);
+router.post('/system/seed', requireSuperadmin, seedData);
+router.post('/system/reset', requireSuperadmin, resetDatabase);
 
-// GET /analytics/doctor-workload - Patient counts per doctor
-router.get('/analytics/doctor-workload', doctorWorkload);
-
-// GET /analytics/medication-trends - Medication frequency analysis
-router.get('/analytics/medication-trends', medicationTrends);
-
-// ============= System Endpoints =============
-
-// POST /system/seed - Triggers bulk-load data (e.g., ?count=5000)
-router.post('/system/seed', seedData);
-
-// POST /system/reset - Clears the database
-router.post('/system/reset', resetDatabase);
-
-// ============= Transactional Endpoint =============
-
-// POST /appointments/complete-checkout - Mark done, issue prescription, create bill
-router.post('/appointments/complete-checkout/', completeCheckout);
-
-
-const { register } = require('./postgres.metric'); // Import the registry you created
-router.get('/metrics', async (req, res) => {
-  try {
-    // 1. Set the correct header for Prometheus (text/plain; version=0.0.4)
-    res.set('Content-Type', register.contentType);
-
-    // 2. Send the metrics data as a string
-    const metrics = await register.metrics();
-    res.end(metrics);
-  } catch (err) {
-    res.status(500).send(err);
-  }
+router.get('/metrics', async (_req, res) => {
+    try {
+        res.set('Content-Type', register.contentType);
+        const metrics = await register.metrics();
+        res.end(metrics);
+    } catch (err) {
+        res.status(500).send(err);
+    }
 });
 
 module.exports = router;

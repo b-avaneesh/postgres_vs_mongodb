@@ -179,3 +179,118 @@ CREATE TABLE billing_25k (
     LIKE billing_5k INCLUDING ALL,
     FOREIGN KEY (appointment_id) REFERENCES appointments_25k(appointment_id)
 );
+
+
+
+
+-- =========================
+-- PATIENTS
+-- =========================
+CREATE INDEX idx_patients_phone_5k ON patients_5k(phone);
+CREATE INDEX idx_patients_email_5k ON patients_5k(email);
+CREATE INDEX idx_patients_name_5k ON patients_5k(first_name, last_name);
+
+-- =========================
+-- DOCTORS
+-- =========================
+CREATE INDEX idx_doctors_department_id_5k ON doctors_5k(department_id);
+CREATE INDEX idx_doctors_license_5k ON doctors_5k(license_number);
+
+-- =========================
+-- DOCTOR SPECIALIZATIONS
+-- =========================
+CREATE INDEX idx_doc_spec_doctor_id_5k ON doctor_specializations_5k(doctor_id);
+CREATE INDEX idx_doc_spec_specialization_5k ON doctor_specializations_5k(specialization);
+
+-- =========================
+-- APPOINTMENTS (MOST CRITICAL)
+-- =========================
+CREATE INDEX idx_appointments_patient_id_5k ON appointments_5k(patient_id);
+CREATE INDEX idx_appointments_doctor_id_5k ON appointments_5k(doctor_id);
+CREATE INDEX idx_appointments_date_5k ON appointments_5k(appointment_date);
+CREATE INDEX idx_appointments_status_5k ON appointments_5k(status);
+
+-- composite
+CREATE INDEX idx_appointments_patient_date_5k 
+ON appointments_5k(patient_id, appointment_date);
+
+CREATE INDEX idx_appointments_doctor_date_5k 
+ON appointments_5k(doctor_id, appointment_date);
+
+-- =========================
+-- BILLING (REVENUE BOTTLENECK)
+-- =========================
+CREATE INDEX idx_billing_appointment_id_5k ON billing_5k(appointment_id);
+CREATE INDEX idx_billing_date_5k ON billing_5k(bill_date);
+CREATE INDEX idx_billing_payment_status_5k ON billing_5k(payment_status);
+
+-- composite
+CREATE INDEX idx_billing_date_status_5k 
+ON billing_5k(bill_date, payment_status);
+
+-- =========================
+-- PRESCRIPTIONS
+-- =========================
+CREATE INDEX idx_prescriptions_appointment_id_5k ON prescriptions_5k(appointment_id);
+CREATE INDEX idx_prescriptions_date_5k ON prescriptions_5k(issued_date);
+
+-- =========================
+-- DEPARTMENTS (NO SUFFIX)
+-- =========================
+CREATE INDEX idx_departments_name ON departments(department_name);
+
+
+
+
+CREATE SEQUENCE IF NOT EXISTS patients_5k_id_seq;
+
+SELECT setval('patients_5k_id_seq', (SELECT MAX(patient_id) FROM patients_5k));
+
+ALTER TABLE patients_5k 
+ALTER COLUMN patient_id SET DEFAULT nextval('patients_5k_id_seq');
+
+
+
+CREATE SEQUENCE IF NOT EXISTS doctors_5k_id_seq;
+
+SELECT setval('doctors_5k_id_seq', (SELECT MAX(doctor_id) FROM doctors_5k));
+
+ALTER TABLE doctors_5k 
+ALTER COLUMN doctor_id SET DEFAULT nextval('doctors_5k_id_seq');
+
+
+
+
+CREATE SEQUENCE IF NOT EXISTS prescription_5k_id_seq;
+
+SELECT setval('prescription_5k_id_seq', (SELECT MAX(prescription_id) FROM prescriptions_5k));
+
+ALTER TABLE prescriptions_5k 
+ALTER COLUMN prescription_id SET DEFAULT nextval('prescription_5k_id_seq');
+
+
+
+
+CREATE SEQUENCE IF NOT EXISTS doctor_specializations_5k_id_seq;
+
+SELECT setval('doctor_specializations_5k_id_seq', (SELECT MAX(id) FROM doctor_specializations_5k));
+
+ALTER TABLE doctor_specializations_5k 
+ALTER COLUMN id SET DEFAULT nextval('doctor_specializations_5k_id_seq');
+
+
+CREATE SEQUENCE IF NOT EXISTS appointments_5k_id_seq;
+
+SELECT setval('appointments_5k_id_seq', COALESCE((SELECT MAX(appointment_id) FROM appointments_5k), 1));
+
+ALTER TABLE appointments_5k 
+ALTER COLUMN appointment_id SET DEFAULT nextval('appointments_5k_id_seq');
+
+
+
+CREATE SEQUENCE IF NOT EXISTS billing_5k_id_seq;
+
+SELECT setval('billing_5k_id_seq', COALESCE((SELECT MAX(bill_id) FROM billing_5k), 1));
+
+ALTER TABLE billing_5k 
+ALTER COLUMN bill_id SET DEFAULT nextval('billing_5k_id_seq');

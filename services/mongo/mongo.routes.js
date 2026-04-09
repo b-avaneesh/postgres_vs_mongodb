@@ -59,4 +59,20 @@ router.post('/system/reset', resetDatabase);
 // POST /appointments/complete-checkout - Mark done, issue prescription, create bill
 router.post('/appointments/complete-checkout', completeCheckout);
 
+// ============= Metrics Endpoint =============
+
+const { register } = require('./mongo.metric'); // Import the registry
+router.get('/metrics', async (req, res) => {
+  try {
+    // Set the correct header for Prometheus (text/plain; version=0.0.4)
+    res.set('Content-Type', register.contentType);
+
+    // Send the metrics data as a string
+    const metrics = await register.metrics();
+    res.end(metrics);
+  } catch (err) {
+    res.status(500).send(err);
+  }
+});
+
 module.exports = router;

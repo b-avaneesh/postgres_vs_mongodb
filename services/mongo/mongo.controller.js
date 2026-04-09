@@ -1,6 +1,32 @@
 const mongoose = require('mongoose');
+const { dbQueryTimer } = require('./mongo.metric');
 
-// Define schemas (assuming these models exist or will be used)
+// ============= HELPER FUNCTIONS =============
+
+/**
+ * Get collection name based on base and db_size
+ * Examples: getCollectionName('patients', '5k') => 'patients_5k'
+ */
+function getCollectionName(base, db_size) {
+    return `${base}_${db_size}`;
+}
+
+/**
+ * Get or create a model for the specified collection
+ * This allows us to dynamically work with different collections based on db_size
+ */
+function getModel(modelName, schema, collectionName) {
+    try {
+        // Try to get existing model
+        return mongoose.model(collectionName);
+    } catch (err) {
+        // Model doesn't exist, create it with specified collection name
+        return mongoose.model(collectionName, schema, collectionName);
+    }
+}
+
+// ============= SCHEMA DEFINITIONS (Reusable) =============
+
 const patientSchema = new mongoose.Schema({
     first_name: String,
     last_name: String,
@@ -10,47 +36,75 @@ const patientSchema = new mongoose.Schema({
     email: String,
     address: String
 }, { timestamps: true });
+patientSchema.index({ patient_id: 1 }, { unique: true, sparse: true });
 
 const doctorSchema = new mongoose.Schema({
+    doctor_id: Number,   // ✅ ADD THIS
     first_name: String,
     last_name: String,
-    specialization: String,
     phone_number: String,
     email: String,
-    department: String
+    department_id: Number
 }, { timestamps: true });
+doctorSchema.index({ doctor_id: 1 }, { unique: true, sparse: true });
+doctorSchema.index({ department_id: 1 });
+
+const departmentSchema = new mongoose.Schema({
+    department_id: Number,
+    department_name: String
+}, { timestamps: true });
+departmentSchema.index({ department_id: 1 }, { unique: true, sparse: true });
+
+const doctorSpecializationSchema = new mongoose.Schema({
+    doctor_id: Number,
+    specialization: String
+}, { timestamps: true });
+doctorSpecializationSchema.index({ doctor_id: 1 });
 
 const appointmentSchema = new mongoose.Schema({
-    patient_id: mongoose.Schema.Types.ObjectId,
-    doctor_id: mongoose.Schema.Types.ObjectId,
+    appointment_id: Number,
+    patient_id: Number,
+    doctor_id: Number,
     appointment_date: Date,
     appointment_time: String,
+    reason_for_visit: String,
     status: { type: String, default: 'Scheduled' }
 }, { timestamps: true });
+appointmentSchema.index({ appointment_id: 1 }, { unique: true, sparse: true });
+appointmentSchema.index({ patient_id: 1 });
+appointmentSchema.index({ doctor_id: 1 });
+appointmentSchema.index({ doctor_id: 1, appointment_id: 1 });
 
 const prescriptionSchema = new mongoose.Schema({
-    appointment_id: mongoose.Schema.Types.ObjectId,
-    patient_id: mongoose.Schema.Types.ObjectId,
-    doctor_id: mongoose.Schema.Types.ObjectId,
+    appointment_id: Number,
+    patient_id: Number,
+    doctor_id: Number,
     medication_name: String,
     dosage: String,
     issued_date: { type: Date, default: Date.now }
 }, { timestamps: true });
+prescriptionSchema.index({ appointment_id: 1 });
+prescriptionSchema.index({ patient_id: 1 });
+prescriptionSchema.index({ doctor_id: 1 });
 
+// UPDATED: To match PostgreSQL billing structure
 const billSchema = new mongoose.Schema({
-    appointment_id: mongoose.Schema.Types.ObjectId,
-    patient_id: mongoose.Schema.Types.ObjectId,
-    amount: Number,
-    bill_date: { type: Date, default: Date.now },
-    status: { type: String, default: 'Pending' }
+    appointment_id: Number,
+    patient_id: Number,
+    consultation_fee: Number,
+    medicine_charges: Number,
+    lab_charges: Number,
+    total_amount: Number,
+    payment_status: String,
+    payment_method: String,
+    bill_date: { type: Date, default: Date.now }
 }, { timestamps: true });
+billSchema.index({ appointment_id: 1 });
+billSchema.index({ patient_id: 1 });
 
-// Create models
-const Patient = mongoose.model('Patient', patientSchema);
-const Doctor = mongoose.model('Doctor', doctorSchema);
-const Appointment = mongoose.model('Appointment', appointmentSchema);
-const Prescription = mongoose.model('Prescription', prescriptionSchema);
-const Bill = mongoose.model('Bill', billSchema);
+// Create base models (for shared collections)
+const Department = mongoose.model('Department', departmentSchema, 'departments');
+const DoctorSpecialization = mongoose.model('DoctorSpecialization', doctorSpecializationSchema, 'doctor_specializations');
 
 // ============= PRIMARY ENDPOINTS =============
 
@@ -58,7 +112,13 @@ const Bill = mongoose.model('Bill', billSchema);
  * POST /patients - Add a new patient record
  */
 async function addPatient(req, res) {
+    const end = dbQueryTimer.startTimer({ operation: 'add_patient' });
     try {
+        console.log("in mongodb add patient");
+        const db_size = req.query.db_size || '5k';
+        const patientCollectionName = getCollectionName('patients', db_size);
+        const Patient = getModel('Patient', patientSchema, patientCollectionName);
+
         const { first_name, last_name, date_of_birth, gender, phone_number, email, address } = req.body;
 
         const patient = new Patient({
@@ -76,6 +136,8 @@ async function addPatient(req, res) {
     } catch (err) {
         console.error('Error adding patient:', err.message);
         res.status(500).json({ error: err.message });
+    } finally {
+        end();
     }
 }
 
@@ -83,23 +145,48 @@ async function addPatient(req, res) {
  * POST /doctors - Add a new doctor profile
  */
 async function addDoctor(req, res) {
+    const end = dbQueryTimer.startTimer({ operation: 'add_doctor' });
     try {
-        const { first_name, last_name, specialization, phone_number, email, department } = req.body;
+        const db_size = req.query.db_size || '5k';
+        const doctorCollectionName = getCollectionName('doctors', db_size);
+        const docSpecCollectionName = getCollectionName('doctor_specializations', db_size);
+        
+        const Doctor = getModel('Doctor', doctorSchema, doctorCollectionName);
+        const DocSpec = getModel('DocSpec', doctorSpecializationSchema, docSpecCollectionName);
+
+        const { first_name, last_name, specialization, phone_number, email, department_id } = req.body;
+
+        // 1. Insert doctor WITHOUT specialization field
+        const latestDoctor = await Doctor.findOne({}, { doctor_id: 1 }).sort({ doctor_id: -1 }).lean();
+        const nextDoctorId = (latestDoctor?.doctor_id || 0) + 1;
 
         const doctor = new Doctor({
+            doctor_id: nextDoctorId,
             first_name,
             last_name,
-            specialization,
             phone_number,
             email,
-            department
+            department_id
         });
 
         const savedDoctor = await doctor.save();
+
+        // 2. Insert specialization separately if provided
+        if (specialization) {
+            const docSpec = new DocSpec({
+                doctor_id: savedDoctor.doctor_id,
+                specialization
+            });
+            await docSpec.save();
+        }
+
+        // Return response matching PostgreSQL structure
         res.status(201).json(savedDoctor);
     } catch (err) {
         console.error('Error adding doctor:', err.message);
         res.status(500).json({ error: err.message });
+    } finally {
+        end();
     }
 }
 
@@ -107,14 +194,23 @@ async function addDoctor(req, res) {
  * POST /appointments - Book a new appointment
  */
 async function addAppointment(req, res) {
+    const end = dbQueryTimer.startTimer({ operation: 'add_appointment' });
     try {
-        const { patient_id, doctor_id, appointment_date, appointment_time, status } = req.body;
+        const db_size = req.query.db_size || '5k';
+        const appointmentCollectionName = getCollectionName('appointments', db_size);
+        const Appointment = getModel('Appointment', appointmentSchema, appointmentCollectionName);
+
+        const { patient_id, doctor_id, appointment_date, appointment_time, reason_for_visit, status } = req.body;
+        const latestAppointment = await Appointment.findOne({}, { appointment_id: 1 }).sort({ appointment_id: -1 }).lean();
+        const nextAppointmentId = (latestAppointment?.appointment_id || 0) + 1;
 
         const appointment = new Appointment({
+            appointment_id: nextAppointmentId,
             patient_id,
             doctor_id,
             appointment_date,
             appointment_time,
+            reason_for_visit,
             status: status || 'Scheduled'
         });
 
@@ -123,6 +219,8 @@ async function addAppointment(req, res) {
     } catch (err) {
         console.error('Error adding appointment:', err.message);
         res.status(500).json({ error: err.message });
+    } finally {
+        end();
     }
 }
 
@@ -130,17 +228,24 @@ async function addAppointment(req, res) {
  * GET /patients/:id - Retrieve a specific patient's profile and history
  */
 async function getPatient(req, res) {
+    const end = dbQueryTimer.startTimer({ operation: 'get_patient' });
     try {
+        const db_size = req.query.db_size || '5k';
+        const patientCollectionName = getCollectionName('patients', db_size);
+        const appointmentCollectionName = getCollectionName('appointments', db_size);
+        
+        const Patient = getModel('Patient', patientSchema, patientCollectionName);
+        const Appointment = getModel('Appointment', appointmentSchema, appointmentCollectionName);
+
         const { id } = req.params;
 
-        const patient = await Patient.findById(id);
+        const patient = await Patient.findOne({ patient_id: Number(id) });
         if (!patient) {
             return res.status(404).json({ error: 'Patient not found' });
         }
 
         // Fetch appointments for this patient
-        const appointments = await Appointment.find({ patient_id: id }).populate('doctor_id');
-
+        const appointments = await Appointment.find({ patient_id: Number(id) });
         res.status(200).json({
             patient,
             appointments
@@ -148,19 +253,27 @@ async function getPatient(req, res) {
     } catch (err) {
         console.error('Error fetching patient:', err.message);
         res.status(500).json({ error: err.message });
+    } finally {
+        end();
     }
 }
+
+
 
 /**
  * PUT /appointments/:id - Update appointment status
  */
 async function updateAppointment(req, res) {
     try {
+        const db_size = req.query.db_size || '5k';
+        const appointmentCollectionName = getCollectionName('appointments', db_size);
+        const Appointment = getModel('Appointment', appointmentSchema, appointmentCollectionName);
+
         const { id } = req.params;
         const { status } = req.body;
 
-        const appointment = await Appointment.findByIdAndUpdate(
-            id,
+        const appointment = await Appointment.findOneAndUpdate(
+            { appointment_id: Number(id) },
             { status },
             { new: true }
         );
@@ -181,10 +294,21 @@ async function updateAppointment(req, res) {
  */
 async function deletePatient(req, res) {
     try {
+        const db_size = req.query.db_size || '5k';
+        const patientCollectionName = getCollectionName('patients', db_size);
+        const appointmentCollectionName = getCollectionName('appointments', db_size);
+        const prescriptionCollectionName = getCollectionName('prescriptions', db_size);
+        const billCollectionName = getCollectionName('billing', db_size);
+
+        const Patient = getModel('Patient', patientSchema, patientCollectionName);
+        const Appointment = getModel('Appointment', appointmentSchema, appointmentCollectionName);
+        const Prescription = getModel('Prescription', prescriptionSchema, prescriptionCollectionName);
+        const Bill = getModel('Bill', billSchema, billCollectionName);
+
         const { id } = req.params;
 
         // Delete appointments
-        await Appointment.deleteMany({ patient_id: id });
+        await Appointment.deleteMany({ patient_id: Number(id) });
 
         // Delete prescriptions
         await Prescription.deleteMany({ patient_id: id });
@@ -193,7 +317,7 @@ async function deletePatient(req, res) {
         await Bill.deleteMany({ patient_id: id });
 
         // Delete patient
-        const result = await Patient.findByIdAndDelete(id);
+        const result = await Patient.findOneAndDelete({ patient_id: Number(id) })
 
         if (!result) {
             return res.status(404).json({ error: 'Patient not found' });
@@ -212,63 +336,112 @@ async function deletePatient(req, res) {
  * GET /analytics/revenue-report - Generates revenue reports by doctor or department
  */
 async function revenueReport(req, res) {
+    const end = dbQueryTimer.startTimer({ operation: 'revenue_report' });
     try {
+        const db_size = req.query.db_size || '5k';
+        const doctorCollectionName = getCollectionName('doctors', db_size);
+        const appointmentCollectionName = getCollectionName('appointments', db_size);
+        const billCollectionName = getCollectionName('billing', db_size);
+
+        const Doctor = getModel('Doctor', doctorSchema, doctorCollectionName);
+
         const { doctor_id, department } = req.query;
 
         let matchStage = {};
         if (doctor_id) {
-            matchStage.doctor_id = new mongoose.Types.ObjectId(doctor_id);
+            matchStage.doctor_id = Number(doctor_id);
         }
 
-        const pipeline = [
-            { $match: matchStage },
+        const pipeline = [{ $match: matchStage }];
+
+        pipeline.push(
             {
-                $group: {
-                    _id: '$doctor_id',
-                    total_appointments: { $sum: 1 }
+                $lookup: {
+                    from: 'departments',
+                    localField: 'department_id',
+                    foreignField: 'department_id',
+                    as: 'department'
                 }
             },
             {
-                $lookup: {
-                    from: 'doctors',
-                    localField: '_id',
-                    foreignField: '_id',
-                    as: 'doctor'
+                $addFields: {
+                    department_name: { $ifNull: [{ $arrayElemAt: ['$department.department_name', 0] }, null] }
                 }
-            },
-            { $unwind: '$doctor' },
+            }
+        );
+
+        if (department) {
+            pipeline.push({ $match: { department_name: department } });
+        }
+
+        pipeline.push(
             {
                 $lookup: {
-                    from: 'bills',
-                    localField: '_id',
+                    from: appointmentCollectionName,
+                    localField: 'doctor_id',
                     foreignField: 'doctor_id',
+                    as: 'appointments'
+                }
+            },
+            {
+                $addFields: {
+                    appointment_ids: {
+                        $filter: {
+                            input: {
+                                $map: {
+                                    input: '$appointments',
+                                    as: 'appointment',
+                                    in: '$$appointment.appointment_id'
+                                }
+                            },
+                            as: 'appointmentId',
+                            cond: { $ne: ['$$appointmentId', null] }
+                        }
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: billCollectionName,
+                    let: { appointmentIds: '$appointment_ids' },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $in: ['$appointment_id', '$$appointmentIds'] }
+                            }
+                        }
+                    ],
                     as: 'bills'
                 }
             },
             {
                 $project: {
-                    doctor_id: '$_id',
-                    doctor_name: { $concat: ['$doctor.first_name', ' ', '$doctor.last_name'] },
-                    department: '$doctor.department',
-                    total_appointments: 1,
-                    total_revenue: { $sum: '$bills.amount' },
+                    doctor_id: '$doctor_id',
+                    doctor_name: { $concat: [{ $ifNull: ['$first_name', ''] }, ' ', { $ifNull: ['$last_name', ''] }] },
+                    department_name: 1,
+                    total_appointments: { $size: { $ifNull: ['$bills', []] } },
+                    total_revenue: {
+                        $sum: {
+                            $map: {
+                                input: { $ifNull: ['$bills', []] },
+                                as: 'bill',
+                                in: { $ifNull: ['$$bill.consultation_fee', 0] }
+                            }
+                        }
+                    },
                     _id: 0
                 }
             },
             { $sort: { total_revenue: -1 } }
-        ];
-
-        if (department) {
-            pipeline.push({
-                $match: { department }
-            });
-        }
+        );
 
         const results = await Doctor.aggregate(pipeline);
         res.status(200).json(results);
     } catch (err) {
         console.error('Error generating revenue report:', err.message);
         res.status(500).json({ error: err.message });
+    } finally {
+        end();
     }
 }
 
@@ -276,31 +449,62 @@ async function revenueReport(req, res) {
  * GET /analytics/doctor-workload - Returns patient counts per doctor
  */
 async function doctorWorkload(req, res) {
+    const end = dbQueryTimer.startTimer({ operation: 'doctor_workload' });
     try {
+        const db_size = req.query.db_size || '5k';
+        const doctorCollectionName = getCollectionName('doctors', db_size);
+        const appointmentCollectionName = getCollectionName('appointments', db_size);
+        const docSpecCollectionName = getCollectionName('doctor_specializations', db_size);
+
+        const Doctor = getModel('Doctor', doctorSchema, doctorCollectionName);
+
         const pipeline = [
             {
                 $lookup: {
-                    from: 'appointments',
-                    localField: '_id',
+                    from: appointmentCollectionName,
+                    localField: 'doctor_id',
                     foreignField: 'doctor_id',
                     as: 'appointments'
                 }
             },
             {
+                $lookup: {
+                    from: docSpecCollectionName,
+                    localField: 'doctor_id',
+                    foreignField: 'doctor_id',
+                    as: 'specializations'
+                }
+            },
+            {
                 $project: {
-                    doctor_id: '$_id',
-                    doctor_name: { $concat: ['$first_name', ' ', '$last_name'] },
-                    specialization: 1,
+                    doctor_id: '$doctor_id',
+                    doctor_name: { $concat: [{ $ifNull: ['$first_name', ''] }, ' ', { $ifNull: ['$last_name', ''] }] },
+                    specialization: { $arrayElemAt: ['$specializations.specialization', 0] },
                     unique_patients: {
                         $size: {
-                            $setToArray: '$appointments.patient_id'
+                            $setUnion: [
+                                {
+                                    $filter: {
+                                        input: {
+                                            $map: {
+                                                input: { $ifNull: ['$appointments', []] },
+                                                as: 'appt',
+                                                in: '$$appt.patient_id'
+                                            }
+                                        },
+                                        as: 'patientId',
+                                        cond: { $ne: ['$$patientId', null] }
+                                    }
+                                },
+                                []
+                            ]
                         }
                     },
-                    total_appointments: { $size: '$appointments' },
+                    total_appointments: { $size: { $ifNull: ['$appointments', []] } },
                     completed_appointments: {
                         $size: {
                             $filter: {
-                                input: '$appointments',
+                                input: { $ifNull: ['$appointments', []] },
                                 as: 'appt',
                                 cond: { $eq: ['$$appt.status', 'Completed'] }
                             }
@@ -309,7 +513,7 @@ async function doctorWorkload(req, res) {
                     scheduled_appointments: {
                         $size: {
                             $filter: {
-                                input: '$appointments',
+                                input: { $ifNull: ['$appointments', []] },
                                 as: 'appt',
                                 cond: { $eq: ['$$appt.status', 'Scheduled'] }
                             }
@@ -326,6 +530,8 @@ async function doctorWorkload(req, res) {
     } catch (err) {
         console.error('Error fetching doctor workload:', err.message);
         res.status(500).json({ error: err.message });
+    } finally {
+        end();
     }
 }
 
@@ -334,6 +540,10 @@ async function doctorWorkload(req, res) {
  */
 async function medicationTrends(req, res) {
     try {
+        const db_size = req.query.db_size || '5k';
+        const prescriptionCollectionName = getCollectionName('prescriptions', db_size);
+        const Prescription = getModel('Prescription', prescriptionSchema, prescriptionCollectionName);
+
         const pipeline = [
             {
                 $group: {
@@ -390,11 +600,28 @@ async function seedData(req, res) {
  */
 async function resetDatabase(req, res) {
     try {
-        // Delete all documents from all collections
+        const db_size = req.query.db_size || '5k';
+        
+        const patientCollectionName = getCollectionName('patients', db_size);
+        const doctorCollectionName = getCollectionName('doctors', db_size);
+        const appointmentCollectionName = getCollectionName('appointments', db_size);
+        const prescriptionCollectionName = getCollectionName('prescriptions', db_size);
+        const billCollectionName = getCollectionName('billing', db_size);
+        const docSpecCollectionName = getCollectionName('doctor_specializations', db_size);
+
+        const Patient = getModel('Patient', patientSchema, patientCollectionName);
+        const Doctor = getModel('Doctor', doctorSchema, doctorCollectionName);
+        const Appointment = getModel('Appointment', appointmentSchema, appointmentCollectionName);
+        const Prescription = getModel('Prescription', prescriptionSchema, prescriptionCollectionName);
+        const Bill = getModel('Bill', billSchema, billCollectionName);
+        const DocSpec = getModel('DocSpec', doctorSpecializationSchema, docSpecCollectionName);
+
+        // Delete all documents from all collections for this db_size
         await Bill.deleteMany({});
         await Prescription.deleteMany({});
         await Appointment.deleteMany({});
         await Patient.deleteMany({});
+        await DocSpec.deleteMany({});
         await Doctor.deleteMany({});
 
         res.status(200).json({ message: 'Database reset successfully' });
@@ -411,57 +638,123 @@ async function resetDatabase(req, res) {
  * This is an atomic transaction that combines multiple operations
  */
 async function completeCheckout(req, res) {
+    const end = dbQueryTimer.startTimer({ operation: 'complete_checkout' });
     const session = await mongoose.startSession();
-    session.startTransaction();
     try {
-        const { appointment_id, medication_name, dosage, amount } = req.body;
+        const db_size = req.query.db_size || '5k';
+        
+        const appointmentCollectionName = getCollectionName('appointments', db_size);
+        const prescriptionCollectionName = getCollectionName('prescriptions', db_size);
+        const billCollectionName = getCollectionName('billing', db_size);
 
-        // 1. Mark appointment as completed
-        const appointment = await Appointment.findByIdAndUpdate(
-            appointment_id,
-            { status: 'Completed' },
-            { new: true, session }
-        );
+        const Appointment = getModel('Appointment', appointmentSchema, appointmentCollectionName);
+        const Prescription = getModel('Prescription', prescriptionSchema, prescriptionCollectionName);
+        const Bill = getModel('Bill', billSchema, billCollectionName);
 
-        if (!appointment) {
-            await session.abortTransaction();
-            return res.status(404).json({ error: 'Appointment not found' });
+        const {
+            appointment_id, 
+            medication_name, 
+            dosage, 
+            consultation_fee = 50.00, 
+            medicine_charges = 20.00, 
+            lab_charges = 0.00,
+            payment_method = 'Cash'
+        } = req.body;
+
+        const parsedAppointmentId = Number(appointment_id);
+        const appointmentFilter = Number.isFinite(parsedAppointmentId) && !Number.isNaN(parsedAppointmentId)
+            ? { appointment_id: parsedAppointmentId }
+            : (mongoose.Types.ObjectId.isValid(appointment_id) ? { _id: appointment_id } : null);
+
+        if (!appointmentFilter) {
+            return res.status(400).json({ error: 'Invalid appointment identifier' });
         }
 
-        // 2. Issue prescription
-        const prescription = new Prescription({
-            appointment_id,
-            patient_id: appointment.patient_id,
-            doctor_id: appointment.doctor_id,
-            medication_name,
-            dosage,
-            issued_date: new Date()
-        });
-        const savedPrescription = await prescription.save({ session });
+        const executeCheckout = async (activeSession = null) => {
+            const queryOptions = activeSession ? { new: true, session: activeSession } : { new: true };
+            const saveOptions = activeSession ? { session: activeSession } : undefined;
 
-        // 3. Create bill
-        const bill = new Bill({
-            appointment_id,
-            patient_id: appointment.patient_id,
-            amount,
-            bill_date: new Date(),
-            status: 'Pending'
-        });
-        const savedBill = await bill.save({ session });
+            const appointment = await Appointment.findOneAndUpdate(
+                appointmentFilter,
+                { status: 'Completed' },
+                queryOptions
+            );
 
-        await session.commitTransaction();
+            if (!appointment) {
+                return null;
+            }
 
-        res.status(200).json({
-            appointment,
-            prescription: savedPrescription,
-            bill: savedBill
-        });
+            const normalizedAppointmentId = appointment.appointment_id ?? parsedAppointmentId;
+            const total_amount = parseFloat(consultation_fee) + parseFloat(medicine_charges) + parseFloat(lab_charges);
+
+            const prescription = new Prescription({
+                appointment_id: normalizedAppointmentId,
+                patient_id: appointment.patient_id,
+                doctor_id: appointment.doctor_id,
+                medication_name,
+                dosage,
+                issued_date: new Date()
+            });
+            await prescription.save(saveOptions);
+
+            const bill = new Bill({
+                appointment_id: normalizedAppointmentId,
+                patient_id: appointment.patient_id,
+                consultation_fee: parseFloat(consultation_fee),
+                medicine_charges: parseFloat(medicine_charges),
+                lab_charges: parseFloat(lab_charges),
+                total_amount,
+                payment_status: 'Paid',
+                payment_method,
+                bill_date: new Date()
+            });
+
+            return bill.save(saveOptions);
+        };
+
+        let savedBill;
+        try {
+            session.startTransaction();
+            savedBill = await executeCheckout(session);
+
+            if (!savedBill) {
+                await session.abortTransaction();
+                return res.status(404).json({ error: 'Appointment not found' });
+            }
+
+            await session.commitTransaction();
+        } catch (err) {
+            const message = err.message || '';
+            const isTransactionUnsupported =
+                message.includes('Transaction numbers are only allowed on a replica set member or mongos') ||
+                message.includes('ReplicaSet') ||
+                message.includes('transaction');
+
+            if (!isTransactionUnsupported) {
+                throw err;
+            }
+
+            if (session.inTransaction()) {
+                await session.abortTransaction();
+            }
+
+            savedBill = await executeCheckout();
+
+            if (!savedBill) {
+                return res.status(404).json({ error: 'Appointment not found' });
+            }
+        }
+
+        res.status(200).json(savedBill);
 
     } catch (err) {
-        await session.abortTransaction();
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
         console.error('Error in complete checkout:', err.message);
         res.status(500).json({ error: err.message });
     } finally {
+        end();
         session.endSession();
     }
 }
